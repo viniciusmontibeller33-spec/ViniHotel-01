@@ -1,0 +1,12 @@
+Clientes:
+cliente@ejemplo.com / cliente123
+maria@ejemplo.com / maria123
+pedro@ejemplo.com / pedro123
+
+Staff:
+staff@vinihotel.com / staff123
+recepcion@vinihotel.com / recepcion123
+
+Administración:
+admin@vinihotel.com / admin123
+gerente@vinihotel.com / gerente123
