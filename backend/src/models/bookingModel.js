@@ -5,9 +5,9 @@ export async function createBooking(bookingData) {
   const { id, roomId, idCliente, checkIn, checkOut, guests, totalPrice, paymentMethod, status, paymentStatus } = bookingData;
 
   const result = await db.run(
-    `INSERT INTO bookings (id, roomId, idCliente, checkIn, checkOut, guests, totalPrice, paymentMethod, status, paymentStatus)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-    [id, roomId, idCliente, checkIn, checkOut, guests, totalPrice, paymentMethod, status, paymentStatus]
+    `INSERT INTO bookings (id, roomId, idCliente, checkIn, checkOut, numberOfGuests, totalPrice, status)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+    [id, roomId, idCliente || null, checkIn, checkOut, guests, totalPrice, status || 'confirmed']
   );
 
   return id;

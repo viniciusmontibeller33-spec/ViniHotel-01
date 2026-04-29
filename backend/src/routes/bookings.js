@@ -51,14 +51,21 @@ router.get('/:id', async (req, res) => {
 });
 
 // Crear una nueva reserva
-router.post('/', authMiddleware, validateBooking, validationMiddleware, async (req, res) => {
+router.post('/', async (req, res) => {
   try {
-    const { roomId, checkIn, checkOut, guests, paymentMethod, paymentStatus = 'pending' } = req.body;
+    const { roomId, checkIn, checkOut, guests, paymentMethod, paymentStatus = 'pending', guestName, guestEmail, totalPrice } = req.body;
 
-    // Verificar que el cliente existe
-    const cliente = await clienteModel.getClienteByUsuario(req.userId);
-    if (!cliente) {
-      return res.status(404).json({ error: 'Cliente no encontrado' });
+    // Validar datos requeridos
+    if (!roomId || !checkIn || !checkOut || !guests) {
+      return res.status(400).json({ 
+        error: 'Faltan campos requeridos: roomId, checkIn, checkOut, guests' 
+      });
+    }
+
+    if (!guestName || !guestEmail) {
+      return res.status(400).json({ 
+        error: 'Se requieren guestName y guestEmail' 
+      });
     }
 
     // Verificar disponibilidad con validaciones completas
@@ -69,29 +76,46 @@ router.post('/', authMiddleware, validateBooking, validationMiddleware, async (r
 
     const id = uuidv4();
 
-    // Calcular precio total (esto debería venir del frontend con el cálculo correcto)
-    let totalPrice = req.body.totalPrice || 0;
+    // Intentar obtener cliente si está autenticado
+    let idCliente = null;
+    if (req.headers.authorization) {
+      const token = req.headers.authorization?.split(' ')[1];
+      if (token) {
+        const decoded = verifyToken(token);
+        if (decoded) {
+          const cliente = await clienteModel.getClienteByUsuario(decoded.userId);
+          if (cliente) {
+            idCliente = cliente.idCliente;
+          }
+        }
+      }
+    }
 
-    await bookingModel.createBooking({
+    // Si el pago es con tarjeta (debit-card), marcar como paid
+    const finalPaymentStatus = paymentMethod === 'debit-card' ? 'paid' : (paymentStatus || 'pending');
+
+    const result = await bookingModel.createBooking({
       id,
       roomId,
-      idCliente: cliente.idCliente,
+      idCliente,
       checkIn,
       checkOut,
       guests,
-      totalPrice,
+      totalPrice: totalPrice || 0,
       paymentMethod,
       status: 'confirmed',
-      paymentStatus
+      paymentStatus: finalPaymentStatus
     });
 
     res.status(201).json({
       message: 'Reserva creada exitosamente',
-      id
+      id,
+      bookingId: id,
+      paymentStatus: finalPaymentStatus
     });
   } catch (error) {
     console.error('Create booking error:', error);
-    res.status(500).json({ error: 'Error al crear reserva' });
+    res.status(500).json({ error: 'Error al crear reserva: ' + error.message });
   }
 });
 

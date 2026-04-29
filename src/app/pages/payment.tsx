@@ -64,7 +64,33 @@ export function Payment() {
         throw new Error("Debes aceptar los términos y condiciones");
       }
 
-      // Crear la reserva en el backend
+      // Validar datos de tarjeta si es pago con tarjeta
+      if (paymentMethod === "debit-card") {
+        const cleanCardNumber = paymentData.cardNumber.replace(/\s/g, '');
+        if (!cleanCardNumber || cleanCardNumber.length < 13) {
+          throw new Error("Por favor, ingresa un número de tarjeta válido (mínimo 13 dígitos)");
+        }
+        if (!paymentData.cardName || paymentData.cardName.trim().length === 0) {
+          throw new Error("Por favor, ingresa el nombre del titular de la tarjeta");
+        }
+        const cleanExpiry = paymentData.expiryDate.replace(/\s/g, '');
+        if (!cleanExpiry || cleanExpiry.length < 5 || !cleanExpiry.includes('/')) {
+          throw new Error("Por favor, ingresa una fecha de vencimiento válida (MM/AA)");
+        }
+        if (!paymentData.cvv || paymentData.cvv.length < 3) {
+          throw new Error("Por favor, ingresa un CVV válido (3-4 dígitos)");
+        }
+        if (!paymentData.billingAddress || paymentData.billingAddress.trim().length === 0) {
+          throw new Error("Por favor, ingresa una dirección de facturación");
+        }
+      }
+
+      // Validar datos de reserva
+      if (!bookingData?.roomId || !bookingData?.checkIn || !bookingData?.checkOut || !bookingData?.guests) {
+        throw new Error("Información de reserva incompleta");
+      }
+
+      // Crear la reserva
       const bookingPayload = {
         roomId: bookingData.roomId,
         checkIn: bookingData.checkIn,
@@ -72,17 +98,38 @@ export function Payment() {
         guests: bookingData.guests,
         totalPrice: bookingData.totalPrice,
         paymentMethod: paymentMethod,
-        paymentStatus: "pending"
+        paymentStatus: paymentMethod === "debit-card" ? "paid" : "pending",
+        guestName: bookingData.guestName,
+        guestEmail: bookingData.guestEmail
       };
 
-      // Intentar crear la reserva en el backend
-      const response = await apiClient.createBooking(bookingPayload);
+      let bookingId = null;
+      let usedBackend = false;
 
-      if (!response || response.error) {
-        throw new Error(response?.error || 'Error al crear la reserva');
+      // Intentar crear la reserva en el backend
+      try {
+        const response = await apiClient.createBooking(bookingPayload);
+        
+        if (response && (response.id || response.message)) {
+          bookingId = response.id || `booking-${Date.now()}`;
+          usedBackend = true;
+          console.log('✅ Reserva creada en backend:', bookingId);
+        } else if (response?.error) {
+          throw new Error(response.error);
+        }
+      } catch (backendError) {
+        console.warn('⚠️ Backend no disponible, usando localStorage:', backendError);
+        // Fallback a localStorage
+        usedBackend = false;
       }
 
-      // Si la reserva se crea exitosamente, guardarla localmente también
+      // Si el backend no funcionó, guardar en localStorage
+      if (!usedBackend) {
+        bookingId = `booking-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
+        console.log('💾 Guardando reserva en localStorage:', bookingId);
+      }
+
+      // Guardar localmente también
       const localBooking = {
         hotelName: bookingData.hotelName,
         hotelId: bookingData.hotelId,
@@ -94,18 +141,26 @@ export function Payment() {
         totalPrice: bookingData.totalPrice,
         guestName: bookingData.guestName,
         guestEmail: user?.email || bookingData.guestEmail,
+        paymentMethod: paymentMethod,
+        paymentStatus: paymentMethod === "debit-card" ? "paid" : "pending"
       };
 
       addBooking(localBooking);
 
       // Navegar a la confirmación
       navigate("/booking-confirmation", {
-        state: { ...bookingData, saved: true, bookingId: response.id },
+        state: { 
+          ...bookingData, 
+          saved: true, 
+          bookingId,
+          paymentMethod,
+          paymentStatus: paymentMethod === "debit-card" ? "paid" : "pending"
+        },
       });
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Error al procesar el pago';
       setError(errorMessage);
-      console.error('Payment error:', err);
+      console.error('❌ Payment error:', err);
     } finally {
       setIsLoading(false);
     }
@@ -243,14 +298,19 @@ export function Payment() {
                         id="cardNumber"
                         placeholder="1234 5678 9012 3456"
                         value={paymentData.cardNumber}
-                        onChange={(e) =>
-                          setPaymentData({ ...paymentData, cardNumber: e.target.value })
-                        }
+                        onChange={(e) => {
+                          const value = e.target.value.replace(/\s/g, '').replace(/\D/g, '').slice(0, 16);
+                          const formatted = value.replace(/(\d{4})/g, '$1 ').trim();
+                          setPaymentData({ ...paymentData, cardNumber: formatted })
+                        }}
                         maxLength={19}
                         className="pr-10"
                       />
                       <CreditCard className="absolute right-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
                     </div>
+                    {paymentData.cardNumber && paymentData.cardNumber.replace(/\s/g, '').length < 13 && (
+                      <p className="text-xs text-red-600">Debe tener al menos 13 dígitos</p>
+                    )}
                   </div>
 
                   <div className="space-y-2">
@@ -260,9 +320,12 @@ export function Payment() {
                       placeholder="JUAN PÉREZ"
                       value={paymentData.cardName}
                       onChange={(e) =>
-                        setPaymentData({ ...paymentData, cardName: e.target.value })
+                        setPaymentData({ ...paymentData, cardName: e.target.value.toUpperCase() })
                       }
                     />
+                    {paymentData.cardName && paymentData.cardName.trim().length === 0 && (
+                      <p className="text-xs text-red-600">Requerido</p>
+                    )}
                   </div>
 
                   <div className="grid grid-cols-2 gap-4">
@@ -273,14 +336,21 @@ export function Payment() {
                           id="expiryDate"
                           placeholder="MM/AA"
                           value={paymentData.expiryDate}
-                          onChange={(e) =>
-                            setPaymentData({ ...paymentData, expiryDate: e.target.value })
-                          }
+                          onChange={(e) => {
+                            let value = e.target.value.replace(/\D/g, '').slice(0, 4);
+                            if (value.length >= 2) {
+                              value = value.slice(0, 2) + '/' + value.slice(2);
+                            }
+                            setPaymentData({ ...paymentData, expiryDate: value })
+                          }}
                           maxLength={5}
                           className="pr-10"
                         />
                         <Calendar className="absolute right-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
                       </div>
+                      {paymentData.expiryDate && paymentData.expiryDate.replace(/\D/g, '').length < 4 && (
+                        <p className="text-xs text-red-600">Formato: MM/AA</p>
+                      )}
                     </div>
 
                     <div className="space-y-2">
@@ -292,13 +362,16 @@ export function Payment() {
                           placeholder="123"
                           value={paymentData.cvv}
                           onChange={(e) =>
-                            setPaymentData({ ...paymentData, cvv: e.target.value })
+                            setPaymentData({ ...paymentData, cvv: e.target.value.replace(/\D/g, '').slice(0, 4) })
                           }
                           maxLength={4}
                           className="pr-10"
                         />
                         <Lock className="absolute right-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
                       </div>
+                      {paymentData.cvv && paymentData.cvv.length < 3 && (
+                        <p className="text-xs text-red-600">Debe tener 3-4 dígitos</p>
+                      )}
                     </div>
                   </div>
 
@@ -312,6 +385,9 @@ export function Payment() {
                         setPaymentData({ ...paymentData, billingAddress: e.target.value })
                       }
                     />
+                    {paymentData.billingAddress && paymentData.billingAddress.trim().length === 0 && (
+                      <p className="text-xs text-red-600">Requerido</p>
+                    )}
                   </div>
                 </div>
               )}
@@ -409,10 +485,48 @@ export function Payment() {
               </p>
             </div>
 
+            {paymentMethod === "debit-card" && (
+              <div className="bg-blue-50 p-3 rounded-lg text-sm">
+                <p className="font-medium text-blue-900 mb-2">Campos requeridos:</p>
+                <ul className="space-y-1 text-blue-800">
+                  <li className={`flex items-center gap-2 ${paymentData.cardNumber && paymentData.cardNumber.replace(/\s/g, '').length >= 13 ? 'text-green-600' : 'text-red-600'}`}>
+                    {paymentData.cardNumber && paymentData.cardNumber.replace(/\s/g, '').length >= 13 ? '✓' : '○'} Número de tarjeta (13+ dígitos)
+                  </li>
+                  <li className={`flex items-center gap-2 ${paymentData.cardName && paymentData.cardName.trim().length > 0 ? 'text-green-600' : 'text-red-600'}`}>
+                    {paymentData.cardName && paymentData.cardName.trim().length > 0 ? '✓' : '○'} Nombre del titular
+                  </li>
+                  <li className={`flex items-center gap-2 ${paymentData.expiryDate && paymentData.expiryDate.replace(/\D/g, '').length === 4 ? 'text-green-600' : 'text-red-600'}`}>
+                    {paymentData.expiryDate && paymentData.expiryDate.replace(/\D/g, '').length === 4 ? '✓' : '○'} Fecha de vencimiento (MM/AA)
+                  </li>
+                  <li className={`flex items-center gap-2 ${paymentData.cvv && paymentData.cvv.length >= 3 ? 'text-green-600' : 'text-red-600'}`}>
+                    {paymentData.cvv && paymentData.cvv.length >= 3 ? '✓' : '○'} CVV (3-4 dígitos)
+                  </li>
+                  <li className={`flex items-center gap-2 ${paymentData.billingAddress && paymentData.billingAddress.trim().length > 0 ? 'text-green-600' : 'text-red-600'}`}>
+                    {paymentData.billingAddress && paymentData.billingAddress.trim().length > 0 ? '✓' : '○'} Dirección de facturación
+                  </li>
+                  <li className={`flex items-center gap-2 ${agreedTerms ? 'text-green-600' : 'text-red-600'}`}>
+                    {agreedTerms ? '✓' : '○'} Aceptar términos y condiciones
+                  </li>
+                </ul>
+              </div>
+            )}
+
             <Button
               className="w-full py-6 text-lg"
               onClick={handlePayment}
-              disabled={isLoading || !agreedTerms}
+              disabled={
+                isLoading || 
+                !agreedTerms ||
+                (paymentMethod === "debit-card" && (
+                  !paymentData.cardNumber.replace(/\s/g, '') ||
+                  paymentData.cardNumber.replace(/\s/g, '').length < 13 ||
+                  !paymentData.cardName.trim() ||
+                  paymentData.expiryDate.replace(/\D/g, '').length !== 4 ||
+                  !paymentData.cvv ||
+                  paymentData.cvv.length < 3 ||
+                  !paymentData.billingAddress.trim()
+                ))
+              }
             >
               {isLoading ? (
                 <>

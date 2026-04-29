@@ -52,10 +52,20 @@ export function Housekeeping() {
   }, [rooms]);
 
   const updateRoomStatus = (roomId: string, newStatus: RoomStatus['status']) => {
+    // Actualizar roomStatuses
     setRoomStatuses(prev =>
       prev.map(room =>
         room.roomId === roomId
           ? { ...room, status: newStatus, lastUpdated: new Date().toISOString() }
+          : room
+      )
+    );
+    
+    // Sincronizar con rooms para guardar persistentemente
+    setRooms(prev =>
+      prev.map(room =>
+        room.id === roomId
+          ? { ...room, status: newStatus }
           : room
       )
     );

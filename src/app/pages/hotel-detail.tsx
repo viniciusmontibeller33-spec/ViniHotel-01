@@ -55,6 +55,30 @@ export function HotelDetail() {
     const room = hotelRooms.find((r) => r.id === selectedRoom);
     if (!room) return;
 
+    // Validar que la habitación está disponible
+    if (room.status && (room.status === 'cleaning' || room.status === 'maintenance' || room.status === 'unavailable')) {
+      alert(`No se puede reservar esta habitación. Estado actual: ${room.status === 'cleaning' ? 'En limpieza' : room.status === 'maintenance' ? 'En mantenimiento' : 'No disponible'}`);
+      return;
+    }
+
+    // Validar que el número de huéspedes no supera la capacidad
+    if (bookingData.guests > room.capacity) {
+      alert(`La capacidad máxima de esta habitación es ${room.capacity} personas. Por favor, selecciona una habitación con más capacidad.`);
+      return;
+    }
+
+    // Validar fechas
+    if (!bookingData.checkIn || !bookingData.checkOut) {
+      alert('Por favor, selecciona ambas fechas (entrada y salida)');
+      return;
+    }
+
+    // Validar que la fecha de salida es después de la de entrada
+    if (new Date(bookingData.checkOut) <= new Date(bookingData.checkIn)) {
+      alert('La fecha de salida debe ser después de la fecha de entrada');
+      return;
+    }
+
     const checkIn = new Date(bookingData.checkIn);
     const checkOut = new Date(bookingData.checkOut);
     const nights = Math.ceil((checkOut.getTime() - checkIn.getTime()) / (1000 * 60 * 60 * 24));
@@ -176,9 +200,9 @@ export function HotelDetail() {
                   <Button
                     className="w-full"
                     onClick={() => setSelectedRoom(room.id)}
-                    disabled={room.available === 0}
+                    disabled={room.available === 0 || (room.status && (room.status === 'cleaning' || room.status === 'maintenance' || room.status === 'unavailable'))}
                   >
-                    {room.available > 0 ? "Reservar Ahora" : "No Disponible"}
+                    {room.available === 0 ? "No Disponible" : (room.status === 'cleaning' ? "En Limpieza" : room.status === 'maintenance' ? "En Mantenimiento" : room.status === 'unavailable' ? "No Disponible" : "Reservar Ahora")}
                   </Button>
                 </DialogTrigger>
                 <DialogContent className="sm:max-w-[500px]">
@@ -285,7 +309,10 @@ export function HotelDetail() {
                       !bookingData.checkIn ||
                       !bookingData.checkOut ||
                       !bookingData.guestName ||
-                      !bookingData.guestEmail
+                      !bookingData.guestEmail ||
+                      bookingData.guests < 1 ||
+                      bookingData.guests > room.capacity ||
+                      new Date(bookingData.checkOut) <= new Date(bookingData.checkIn)
                     }
                   >
                     Confirmar Reserva
