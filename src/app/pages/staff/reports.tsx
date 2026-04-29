@@ -1,13 +1,21 @@
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { useBooking } from "../../context/booking-context";
 import { BarChart3, TrendingUp, DollarSign, Users, Calendar, Download } from "lucide-react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "../../components/ui/card";
 import { Button } from "../../components/ui/button";
 import { Badge } from "../../components/ui/badge";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "../../components/ui/select";
 
 export function Reports() {
   const { getAllBookings, invoices } = useBooking();
   const bookings = getAllBookings();
+  const [exportFormat, setExportFormat] = useState<"csv" | "json">("csv");
 
   const stats = useMemo(() => {
     const totalRevenue = invoices.reduce((sum, inv) => sum + inv.total, 0);
@@ -54,6 +62,104 @@ export function Reports() {
 
   const formatCurrency = (amount: number) => `$${amount.toFixed(2)}`;
 
+  // Función para exportar reporte
+  const handleExportReport = () => {
+    try {
+      if (exportFormat === "csv") {
+        exportToCSV();
+      } else {
+        exportToJSON();
+      }
+    } catch (error) {
+      console.error("Error al exportar reporte:", error);
+      alert("Error al exportar el reporte");
+    }
+  };
+
+  // Exportar a CSV
+  const exportToCSV = () => {
+    const headers = ["Hotel", "Reservas", "Ingresos"];
+    const csvContent = [
+      headers.join(","),
+      ...Object.entries(stats.hotelData).map(([hotel, data]) =>
+        `"${hotel}",${data.count},${data.revenue.toFixed(2)}`
+      ),
+      "", // línea en blanco
+      "Resumen General",
+      `Ingresos Totales,${stats.totalRevenue.toFixed(2)}`,
+      `Total Reservas,${stats.totalBookings}`,
+      `Reservas Confirmadas,${stats.confirmedBookings}`,
+      `Reservas Completadas,${stats.completedBookings}`,
+      `Reservas Canceladas,${stats.cancelledBookings}`,
+      `Tasa de Ocupación,${stats.occupancyRate.toFixed(1)}%`,
+      `Valor Promedio,${stats.averageBookingValue.toFixed(2)}`,
+      "",
+      "Ingresos Mensuales",
+      "Mes,Reservas,Ingresos",
+      ...Object.entries(stats.monthlyData).map(([month, data]) =>
+        `"${month}",${data.count},${data.revenue.toFixed(2)}`
+      ),
+    ].join("\n");
+
+    const blob = new Blob([csvContent], { type: "text/csv" });
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `reporte-hoteles-${new Date().toISOString().split("T")[0]}.csv`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    window.URL.revokeObjectURL(url);
+  };
+
+  // Exportar a JSON
+  const exportToJSON = () => {
+    const reportData = {
+      generatedAt: new Date().toISOString(),
+      summary: {
+        totalRevenue: stats.totalRevenue,
+        totalBookings: stats.totalBookings,
+        confirmedBookings: stats.confirmedBookings,
+        completedBookings: stats.completedBookings,
+        cancelledBookings: stats.cancelledBookings,
+        occupancyRate: stats.occupancyRate,
+        averageBookingValue: stats.averageBookingValue,
+      },
+      hotelPerformance: Object.entries(stats.hotelData).map(([hotel, data]) => ({
+        hotel,
+        bookingsCount: data.count,
+        revenue: data.revenue,
+      })),
+      monthlyData: Object.entries(stats.monthlyData).map(([month, data]) => ({
+        month,
+        bookingsCount: data.count,
+        revenue: data.revenue,
+      })),
+      bookingsDetails: bookings.map(b => ({
+        id: b.id,
+        hotel: b.hotelName,
+        room: b.roomName,
+        guests: b.guests,
+        checkIn: b.checkIn,
+        checkOut: b.checkOut,
+        totalPrice: b.totalPrice,
+        status: b.status,
+        createdAt: b.createdAt,
+      })),
+    };
+
+    const jsonString = JSON.stringify(reportData, null, 2);
+    const blob = new Blob([jsonString], { type: "application/json" });
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `reporte-hoteles-${new Date().toISOString().split("T")[0]}.json`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    window.URL.revokeObjectURL(url);
+  };
+
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
       <div className="mb-8 flex justify-between items-center">
@@ -63,10 +169,21 @@ export function Reports() {
             Análisis detallado del rendimiento del hotel
           </p>
         </div>
-        <Button>
-          <Download className="w-4 h-4 mr-2" />
-          Exportar Reporte
-        </Button>
+        <div className="flex gap-3 items-center">
+          <Select value={exportFormat} onValueChange={(value: any) => setExportFormat(value)}>
+            <SelectTrigger className="w-[140px]">
+              <SelectValue placeholder="Formato" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="csv">📄 Exportar CSV</SelectItem>
+              <SelectItem value="json">📋 Exportar JSON</SelectItem>
+            </SelectContent>
+          </Select>
+          <Button onClick={handleExportReport} className="bg-blue-600 hover:bg-blue-700">
+            <Download className="w-4 h-4 mr-2" />
+            Descargar
+          </Button>
+        </div>
       </div>
 
       {/* KPIs Principales */}
