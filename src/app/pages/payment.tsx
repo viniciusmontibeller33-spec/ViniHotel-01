@@ -407,17 +407,23 @@ export function Payment() {
                 </div>
               )}
               {paymentMethod === "qr" && (
-                <div className="bg-gradient-to-r from-purple-100 via-blue-50 to-cyan-100 border border-purple-200 p-4 rounded-lg">
-                  <p className="font-semibold">Pago por QR</p>
-                  <p className="text-sm text-gray-700 mt-1">
+                <div className="bg-gradient-to-r from-purple-100 via-blue-50 to-cyan-100 border border-purple-200 p-6 rounded-lg">
+                  <p className="font-semibold text-lg">Pago por QR</p>
+                  <p className="text-sm text-gray-700 mt-2">
                     Escanea el siguiente código QR con tu app bancaria y completa el pago de <strong>${(bookingData.totalPrice * 1.16).toFixed(2)}</strong>.
                   </p>
-                  <div className="mt-3 p-3 bg-white rounded-lg border border-dashed border-purple-300">
-                    <div className="w-40 h-40 bg-purple-100 rounded-lg mx-auto flex items-center justify-center text-purple-500">
-                      QR
+                  <div className="mt-4 p-4 bg-white rounded-lg border border-dashed border-purple-300 flex justify-center">
+                    <div className="text-center">
+                      <img 
+                        src="/qr-payment.png" 
+                        alt="Código QR de pago"
+                        className="w-48 h-48 mx-auto object-contain"
+                      />
                     </div>
                   </div>
-                  <p className="text-xs text-gray-600 mt-2">Paga y vuelve para completar tu reserva.</p>
+                  <p className="text-xs text-gray-600 mt-3">
+                    💡 Abre tu app bancaria, selecciona la opción de pagar por QR y escanea esta imagen. Después vuelve para completar tu reserva.
+                  </p>
                 </div>
               )}
             </CardContent>
