@@ -324,3 +324,4 @@ const API_URL = 'http://localhost:5000/api';
 ---
 
 ¿Tienes preguntas sobre alguna implementación específica?
+.
