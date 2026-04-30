@@ -2,13 +2,24 @@ import { getDatabase } from '../utils/database.js';
 
 export async function createRoom(roomData) {
   const db = await getDatabase();
-  const { id, hotelId, name, type, price, capacity, image, amenities, available, status } = roomData;
+  const { id, hotelId, name, type, price, capacity, image, amenities, available } = roomData;
 
   const result = await db.run(
-    `INSERT INTO rooms (id, hotelId, name, type, price, capacity, image, amenities, available, status)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-    [id, hotelId, name, type, price, capacity, image, JSON.stringify(amenities), available, status]
+    `INSERT INTO rooms (id, hotelId, name, roomTypeId, price, capacity, image, available)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+    [id, hotelId, name, type, price, capacity, image, available]
   );
+
+  // Insertar amenities en tabla separada si existen
+  if (amenities && Array.isArray(amenities)) {
+    const { v4: uuidv4 } = await import('uuid');
+    for (const amenity of amenities) {
+      await db.run(
+        `INSERT INTO room_amenities (id, roomId, amenity) VALUES (?, ?, ?)`,
+        [uuidv4(), id, amenity]
+      );
+    }
+  }
 
   return id;
 }
@@ -20,7 +31,11 @@ export async function getRoomById(id) {
     [id]
   );
   if (room) {
-    room.amenities = JSON.parse(room.amenities);
+    const amenities = await db.all(
+      'SELECT amenity FROM room_amenities WHERE roomId = ?',
+      [id]
+    );
+    room.amenities = amenities.map(a => a.amenity);
   }
   return room;
 }
@@ -31,31 +46,55 @@ export async function getRoomsByHotel(hotelId) {
     'SELECT * FROM rooms WHERE hotelId = ?',
     [hotelId]
   );
-  return rooms.map(r => ({
-    ...r,
-    amenities: JSON.parse(r.amenities)
-  }));
+  
+  for (const room of rooms) {
+    const amenities = await db.all(
+      'SELECT amenity FROM room_amenities WHERE roomId = ?',
+      [room.id]
+    );
+    room.amenities = amenities.map(a => a.amenity);
+  }
+  
+  return rooms;
 }
 
 export async function getAllRooms() {
   const db = await getDatabase();
   const rooms = await db.all('SELECT * FROM rooms');
-  return rooms.map(r => ({
-    ...r,
-    amenities: JSON.parse(r.amenities)
-  }));
+  
+  for (const room of rooms) {
+    const amenities = await db.all(
+      'SELECT amenity FROM room_amenities WHERE roomId = ?',
+      [room.id]
+    );
+    room.amenities = amenities.map(a => a.amenity);
+  }
+  
+  return rooms;
 }
 
 export async function updateRoom(id, roomData) {
   const db = await getDatabase();
-  const { name, type, price, capacity, image, amenities, available, status } = roomData;
+  const { name, type, price, capacity, image, amenities, available } = roomData;
 
   const result = await db.run(
     `UPDATE rooms 
-     SET name = ?, type = ?, price = ?, capacity = ?, image = ?, amenities = ?, available = ?, status = ?, updatedAt = CURRENT_TIMESTAMP
+     SET name = ?, roomTypeId = ?, price = ?, capacity = ?, image = ?, available = ?, updatedAt = CURRENT_TIMESTAMP
      WHERE id = ?`,
-    [name, type, price, capacity, image, JSON.stringify(amenities), available, status, id]
+    [name, type, price, capacity, image, available, id]
   );
+
+  // Actualizar amenities
+  if (amenities && Array.isArray(amenities)) {
+    await db.run('DELETE FROM room_amenities WHERE roomId = ?', [id]);
+    const { v4: uuidv4 } = await import('uuid');
+    for (const amenity of amenities) {
+      await db.run(
+        `INSERT INTO room_amenities (id, roomId, amenity) VALUES (?, ?, ?)`,
+        [uuidv4(), id, amenity]
+      );
+    }
+  }
 
   return result.changes > 0;
 }

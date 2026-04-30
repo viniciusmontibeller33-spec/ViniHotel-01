@@ -66,29 +66,32 @@ async function loadSampleData() {
     }
     console.log('✅ Usuarios cargados');
 
-    // Cargar hoteles
+    // Crear mapeo de hoteles originales a nuevos IDs
+    const hotelMap = new Map();
     for (const hotel of sampleHotels) {
+      const newId = uuidv4();
+      hotelMap.set(hotel.idHotel, newId);
       const hotelWithId = {
         ...hotel,
-        idHotel: uuidv4()
+        idHotel: newId
       };
       await hotelModel.createHotel(hotelWithId);
     }
     console.log('✅ Hoteles cargados');
 
-    // Cargar habitaciones (necesitamos los IDs de hoteles reales)
-    const hotels = await hotelModel.getAllHotels();
-    if (hotels.length > 0) {
-      for (let i = 0; i < sampleRooms.length; i++) {
+    // Cargar habitaciones con los IDs correctos
+    for (const room of sampleRooms) {
+      const correctHotelId = hotelMap.get(room.hotelId);
+      if (correctHotelId) {
         const roomData = {
-          ...sampleRooms[i],
+          ...room,
           id: uuidv4(),
-          hotelId: hotels[i % hotels.length].idHotel
+          hotelId: correctHotelId
         };
         await roomModel.createRoom(roomData);
       }
-      console.log('✅ Habitaciones cargadas');
     }
+    console.log('✅ Habitaciones cargadas');
 
   } catch (error) {
     console.error('⚠️ Error al cargar datos de prueba:', error.message);

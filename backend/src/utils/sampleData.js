@@ -35,14 +35,13 @@ export const sampleRooms = [
   {
     id: uuidv4(),
     hotelId: sampleHotels[0].idHotel,
-    name: 'Habitación Estándar',
-    type: 'standard',
+    name: 'Habitación Simple',
+    type: 'single',
     price: 120,
-    capacity: 2,
+    capacity: 1,
     image: 'https://images.unsplash.com/photo-1631049307264-da0ec9d70304?w=500',
-    amenities: ['Cama King', 'Aire Acondicionado', 'TV Smart', 'Baño Privado'],
-    available: 5,
-    status: 'available'
+    amenities: ['Cama Simple', 'Aire Acondicionado', 'TV Smart', 'Baño Privado'],
+    available: 5
   },
   {
     id: uuidv4(),
@@ -53,32 +52,29 @@ export const sampleRooms = [
     capacity: 4,
     image: 'https://images.unsplash.com/photo-1611077313301-6b5ea99b8e77?w=500',
     amenities: ['Sala de Estar', 'Jacuzzi', 'Balcón Privado', 'Minibar', 'Servicio Concierge'],
-    available: 2,
-    status: 'available'
+    available: 2
   },
   {
     id: uuidv4(),
     hotelId: sampleHotels[1].idHotel,
-    name: 'Habitación Playa',
-    type: 'beach',
+    name: 'Habitación Doble con Vista',
+    type: 'double',
     price: 200,
     capacity: 2,
     image: 'https://images.unsplash.com/photo-1618246347337-14c6d4e28c75?w=500',
-    amenities: ['Vista al Mar', 'Acceso Playa', 'Terraza', 'Ducha Exterior'],
-    available: 8,
-    status: 'available'
+    amenities: ['Vista al Mar', 'Cama King', 'Terraza', 'Ducha Exterior'],
+    available: 8
   },
   {
     id: uuidv4(),
     hotelId: sampleHotels[2].idHotel,
-    name: 'Cabaña Deluxe',
-    type: 'cabin',
-    price: 180,
-    capacity: 3,
+    name: 'Penthouse Deluxe',
+    type: 'penthouse',
+    price: 500,
+    capacity: 6,
     image: 'https://images.unsplash.com/photo-1606445992292-49d814d10f73?w=500',
-    amenities: ['Chimenea', 'Vista Montaña', 'Terraza', 'Cocina Completa'],
-    available: 3,
-    status: 'available'
+    amenities: ['Chimenea', 'Vista Montaña', 'Terraza Privada', 'Cocina Completa', 'Piscina Privada'],
+    available: 1
   }
 ];
 
@@ -129,19 +125,37 @@ export async function loadSampleData(db) {
     // Cargar hoteles
     for (const hotel of sampleHotels) {
       await db.run(
-        `INSERT INTO hoteles (idHotel, nombre, description, location, image, rating, amenities)
-         VALUES (?, ?, ?, ?, ?, ?, ?)`,
-        [hotel.idHotel, hotel.nombre, hotel.description, hotel.location, hotel.image, hotel.rating, JSON.stringify(hotel.amenities)]
+        `INSERT INTO hoteles (idHotel, nombre, description, location, image, rating)
+         VALUES (?, ?, ?, ?, ?, ?)`,
+        [hotel.idHotel, hotel.nombre, hotel.description, hotel.location, hotel.image, hotel.rating]
       );
+
+      // Cargar amenities del hotel en tabla separada
+      for (const amenity of hotel.amenities) {
+        await db.run(
+          `INSERT INTO hotel_amenities (id, hotelId, amenity)
+           VALUES (?, ?, ?)`,
+          [uuidv4(), hotel.idHotel, amenity]
+        );
+      }
     }
 
     // Cargar habitaciones
     for (const room of sampleRooms) {
       await db.run(
-        `INSERT INTO rooms (id, hotelId, name, type, price, capacity, image, amenities, available, status)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-        [room.id, room.hotelId, room.name, room.type, room.price, room.capacity, room.image, JSON.stringify(room.amenities), room.available, room.status]
+        `INSERT INTO rooms (id, hotelId, name, roomTypeId, price, capacity, image, available)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+        [room.id, room.hotelId, room.name, room.type, room.price, room.capacity, room.image, room.available]
       );
+
+      // Cargar amenities de la habitación en tabla separada
+      for (const amenity of room.amenities) {
+        await db.run(
+          `INSERT INTO room_amenities (id, roomId, amenity)
+           VALUES (?, ?, ?)`,
+          [uuidv4(), room.id, amenity]
+        );
+      }
     }
 
     console.log('✅ Datos de prueba cargados exitosamente');
